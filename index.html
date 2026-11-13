@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="ru"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'unsafe-inline'; img-src data:; connect-src https://ioxvnzlfwzikzysrjwpu.supabase.co; base-uri 'none'; form-action 'none'">
 <title>Lumière — Beauty Studio</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Inter:wght@400;500;600&display=swap">
 <style>
@@ -173,21 +173,25 @@ if(fails.length>=5)return say("e6");
 const n=$("nm").value.trim().slice(0,60),e=$("em").value.trim().toLowerCase(),p=$("pw").value;
 if(!e||!p||(mode==="r"&&!n))return say("e1");
 if(!/^[^\s@]{1,64}@[^\s@]+\.[^\s@]{2,}$/.test(e))return say("e2");
-const d=db();
+if(mode==="r"&&(p.length<10||!/[A-Za-zА-Яа-я]/.test(p)||!/\d/.test(p)))return say("e3");
+const go=$("go");go.disabled=true;
+try{
 if(mode==="r"){
-if(p.length<10||!/[A-Za-zА-Яа-я]/.test(p)||!/\d/.test(p))return say("e3");
-if(d[e])return say("e4");
-const salt=crypto.getRandomValues(new Uint8Array(16));
-d[e]={n,s:b64(salt),h:await hash(p,salt)};save(d);say("ok",1);setUser(e);
-const box=$("mail");box.replaceChildren();const m=mk("div","mail");
-m.append(mk("b","","✉️ "+t.mt),mk("br"),mk("b","","To: "+e),mk("br"),mk("b","",t.ms),mk("p","",t.mb.replace("{n}",n)),mk("small","",t.demo));box.append(m);
+const j=await api("/auth/v1/signup",{method:"POST",auth:false,body:{email:e,password:p,data:{name:n}}});
+if(j&&j.access_token){saveSess(j);say("ok",1);await afterLogin()}else say("ck",1);
 }else{
-const u=d[e],salt=u?Uint8Array.from(atob(u.s),c=>c.charCodeAt(0)):crypto.getRandomValues(new Uint8Array(16));
-const h=await hash(p,salt);
-if(!u||h!==u.h){fails.push(now);return say("e5")}
-const m=$("msg");m.className="msg ok";m.textContent=t.wl+", "+u.n+"!";setUser(e);
+const j=await api("/auth/v1/token?grant_type=password",{method:"POST",auth:false,body:{email:e,password:p}});
+saveSess(j);say("wl",1);await afterLogin();setTimeout(()=>{$("account").hidden=true;$("me").scrollIntoView({behavior:"smooth"})},600);
 }
-$("pw").value="";};
+$("pw").value="";
+}catch(err){
+if(err.code==="email_not_confirmed")say("ck");
+else if(err.status===429||err.code==="over_email_send_rate_limit")say("e6");
+else if(err.code==="weak_password")say("e3");
+else if(mode==="l"&&err.status===400){fails.push(now);say("e5")}
+else say("er");
+}
+go.disabled=false};
 $("tr").onclick=()=>setMode("r");$("tl").onclick=()=>setMode("l");
 $("lang").onchange=e=>{L=e.target.value;try{localStorage.setItem("lum_lang",L)}catch(x){}render();setMode(mode)};
 try{const s=localStorage.getItem("lum_lang");if(s&&T[s]){L=s;$("lang").value=s}}catch(e){}
@@ -199,39 +203,66 @@ fr:{hi:"Bonjour",bt:"Réservation en ligne",ss:"Soin",dt:"Date",tt:"Horaires dis
 es:{hi:"Hola",bt:"Reserva online",ss:"Servicio",dt:"Fecha",tt:"Horas libres",cf:"Confirmar reserva",my:"Mis reservas",no:"Aún no hay reservas",cl:"Cancelar",out:"Salir",bm:"Reserva: {s}, {d}, {t}. ¡Te esperamos en Lumière!",bs:"Reserva confirmada"},
 tr:{hi:"Merhaba",bt:"Online randevu",ss:"Hizmet",dt:"Tarih",tt:"Uygun saatler",cf:"Randevuyu onayla",my:"Randevularım",no:"Henüz randevu yok",cl:"İptal",out:"Çıkış",bm:"Randevunuz: {s}, {d}, {t}. Lumière’de görüşmek üzere!",bs:"Randevu onaylandı"}};
 for(const k in Y)Object.assign(T[k],Y[k]);
-let cur=null,lastMail=null,tab="b";try{cur=localStorage.getItem("lum_cur")}catch(e){}
-const bkAll=()=>{try{return JSON.parse(localStorage.getItem("lum_bk")||"{}")}catch(e){return{}}},bkSave=o=>{try{localStorage.setItem("lum_bk",JSON.stringify(o))}catch(e){}};
-const dk=d=>d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"),hs=s=>{let x=7;for(const c of s)x=(x*31+c.charCodeAt(0))>>>0;return x};
+const Z={
+ru:{ck:"Мы отправили письмо. Подтвердите почту по ссылке в нём, затем войдите.",er:"Ошибка. Попробуйте ещё раз позже.",tk:"Это время уже занято. Выберите другое."},
+en:{ck:"We sent you an email. Confirm your address via the link, then log in.",er:"Something went wrong. Please try again later.",tk:"This time is already taken. Pick another."},
+de:{ck:"Wir haben Ihnen eine E-Mail geschickt. Bestätigen Sie Ihre Adresse über den Link und melden Sie sich dann an.",er:"Fehler. Bitte später erneut versuchen.",tk:"Diese Zeit ist schon vergeben. Bitte andere wählen."},
+fr:{ck:"Nous vous avons envoyé un e-mail. Confirmez votre adresse via le lien, puis connectez-vous.",er:"Erreur. Réessayez plus tard.",tk:"Ce créneau est déjà pris. Choisissez-en un autre."},
+es:{ck:"Te enviamos un correo. Confirma tu dirección con el enlace y luego inicia sesión.",er:"Error. Inténtalo de nuevo más tarde.",tk:"Esta hora ya está ocupada. Elige otra."},
+tr:{ck:"Size bir e-posta gönderdik. Bağlantıdan adresinizi onaylayın, sonra giriş yapın.",er:"Hata. Lütfen daha sonra tekrar deneyin.",tk:"Bu saat dolu. Başka bir saat seçin."}};
+for(const k in Z)Object.assign(T[k],Z[k]);
+const SU="https://ioxvnzlfwzikzysrjwpu.supabase.co",SK="sb_publishable_ltU8z-cAcMuCH8llHW7QCA_4oYGNwc-";
+let sess=null,tab="b",note=null,busyMap={},mine=[];
+try{sess=JSON.parse(localStorage.getItem("lum_sess")||"null")}catch(e){}
+const saveSess=v=>{sess=v;try{v?localStorage.setItem("lum_sess",JSON.stringify(v)):localStorage.removeItem("lum_sess")}catch(e){}};
+async function api(path,o={}){
+const h={apikey:SK,"Content-Type":"application/json"};
+if(o.auth!==false&&sess)h.Authorization="Bearer "+sess.access_token;
+if(o.prefer)h.Prefer=o.prefer;
+const r=await fetch(SU+path,{method:o.method||"GET",headers:h,body:o.body?JSON.stringify(o.body):undefined});
+let j=null;try{j=await r.json()}catch(e){}
+if(!r.ok)throw Object.assign(new Error("api"),{status:r.status,code:j&&(j.error_code||j.code)});
+return j}
+async function ensure(){if(!sess)return false;if(sess.expires_at*1000<Date.now()+60000){try{saveSess(await api("/auth/v1/token?grant_type=refresh_token",{method:"POST",auth:false,body:{refresh_token:sess.refresh_token}}))}catch(e){saveSess(null);return false}}return true}
+const dk=d=>d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
 const TS=["10:00","11:00","12:00","13:00","14:00","15:00","16:00","17:00","18:00","19:00"],sel={s:0,d:null,t:null};
-const taken=(d,t)=>hs(d+"|"+t)%100<35||Object.values(bkAll()).some(a=>a.some(b=>b.d===d&&b.t===t));
 const days=()=>{const n=new Date();return Array.from({length:14},(_,i)=>new Date(n.getFullYear(),n.getMonth(),n.getDate()+i))};
 const fmtL=d=>new Intl.DateTimeFormat(L,{weekday:"long",day:"numeric",month:"long"}).format(d);
-function setUser(e){cur=e;try{localStorage.setItem("lum_cur",e)}catch(x){}drawMe();if(mode==="l")setTimeout(()=>{$("account").hidden=true;$("me").scrollIntoView({behavior:"smooth"})},700)}
+async function loadData(){
+const d=days();
+try{
+await ensure();
+const r=await api("/rest/v1/rpc/busy_slots",{method:"POST",body:{from_day:dk(d[0]),to_day:dk(d[13])}});
+busyMap={};r.forEach(x=>busyMap[x.day+"|"+String(x.slot).slice(0,5)]=1);
+mine=sess?await api("/rest/v1/bookings?select=id,service,day,slot&order=day.asc,slot.asc"):[];
+}catch(e){}}
+async function afterLogin(){await loadData();drawMe()}
 function drawMe(){
-const t=T[L],me=$("me"),ab=$("acc"),u=cur&&db()[cur];
-if(!u){me.hidden=true;ab.dataset.i="bk";ab.textContent=t.bk;return}
-delete ab.dataset.i;ab.textContent=u.n.split(" ")[0];me.hidden=false;me.replaceChildren();
+const t=T[L],me=$("me"),ab=$("acc");
+if(!sess||!sess.user){me.hidden=true;ab.dataset.i="bk";ab.textContent=t.bk;return}
+const nm=((sess.user.user_metadata&&sess.user.user_metadata.name)||(sess.user.email||"").split("@")[0]).split(" ")[0];
+delete ab.dataset.i;ab.textContent=nm;me.hidden=false;me.replaceChildren();
 if(!sel.d)sel.d=dk(days().find(x=>x.getDay()!==0));
-const w=mk("div","mw"),top=mk("div","mt");top.append(mk("span","eb",t.bt),mk("h2","serif",t.hi+", "+u.n.split(" ")[0]+"!"));
-const lo=mk("button","btn o s",t.out);lo.onclick=()=>{cur=null;lastMail=null;try{localStorage.removeItem("lum_cur")}catch(e){}drawMe()};top.append(lo);
+const w=mk("div","mw"),top=mk("div","mt");top.append(mk("span","eb",t.bt),mk("h2","serif",t.hi+", "+nm+"!"));
+const lo=mk("button","btn o s",t.out);lo.onclick=async()=>{try{await api("/auth/v1/logout",{method:"POST"})}catch(e){}saveSess(null);mine=[];note=null;drawMe()};top.append(lo);
 const g=mk("div","bg"),c=mk("div","bc"),ss=document.createElement("select");
 t.s.forEach((n,i)=>{const o=mk("option","",n+" — €"+SP[i]);o.value=i;ss.append(o)});ss.value=sel.s;ss.onchange=()=>{sel.s=+ss.value};
 const ds=mk("div","days");days().forEach(x=>{const k=dk(x),b=mk("button","day"+(sel.d===k?" on":""));b.disabled=x.getDay()===0;b.append(mk("small","",new Intl.DateTimeFormat(L,{weekday:"short"}).format(x)),mk("b","",x.getDate()));b.onclick=()=>{sel.d=k;sel.t=null;drawMe()};ds.append(b)});
-const sl=mk("div","slots"),now=new Date();TS.forEach(s=>{const bz=taken(sel.d,s)||(sel.d===dk(now)&&+s.slice(0,2)<=now.getHours()),e=mk("button","slot"+(bz?" busy":"")+(sel.t===s?" on":""),s);e.disabled=bz;e.onclick=()=>{sel.t=s;drawMe()};sl.append(e)});
+const sl=mk("div","slots"),now=new Date();TS.forEach(s=>{const bz=busyMap[sel.d+"|"+s]||(sel.d===dk(now)&&+s.slice(0,2)<=now.getHours()),e=mk("button","slot"+(bz?" busy":"")+(sel.t===s?" on":""),s);e.disabled=!!bz;e.onclick=()=>{sel.t=s;drawMe()};sl.append(e)});
 const cf=mk("button","btn",t.cf);cf.style.cssText="width:100%;margin-top:20px";cf.disabled=!sel.t;
-cf.onclick=()=>{const a=bkAll();(a[cur]=a[cur]||[]).push({s:sel.s,d:sel.d,t:sel.t});bkSave(a);lastMail={to:cur,sub:t.bs,body:t.bm.replace("{s}",t.s[sel.s]).replace("{d}",fmtL(new Date(sel.d+"T12:00"))).replace("{t}",sel.t)};sel.t=null;drawMe()};
+cf.onclick=async()=>{cf.disabled=true;try{await ensure();await api("/rest/v1/bookings",{method:"POST",prefer:"return=minimal",body:{service:sel.s,day:sel.d,slot:sel.t}});note={ok:1,txt:t.bs+": "+t.s[sel.s]+", "+fmtL(new Date(sel.d+"T12:00"))+", "+sel.t}}catch(e){note={ok:0,txt:t[e.code==="23505"?"tk":"er"]}}await loadData();sel.t=null;drawMe()};
 c.append(mk("label","",t.ss),ss,mk("label","",t.dt),ds,mk("div","mute",fmtL(new Date(sel.d+"T12:00"))),mk("label","",t.tt),sl,cf);
-if(lastMail){const m=mk("div","mail");m.append(mk("b","","✉️ "+t.mt),mk("br"),mk("b","","To: "+lastMail.to),mk("br"),mk("b","",lastMail.sub),mk("p","",lastMail.body),mk("small","",t.demo));c.append(m)}
+if(note)c.append(mk("div","msg "+(note.ok?"ok":"err"),note.txt));
 const bl=mk("div","bl");bl.append(mk("h3","serif",t.my));
-const mine=(bkAll()[cur]||[]).slice().sort((a,b)=>(a.d+a.t).localeCompare(b.d+b.t));
 if(!mine.length)bl.append(mk("p","mute",t.no));
-mine.forEach(x=>{const r=mk("div","bi"),i=mk("div");i.append(mk("b","",t.s[x.s]),mk("div","mute",fmtL(new Date(x.d+"T12:00"))+" · "+x.t));const b=mk("button","btn o s",t.cl);b.onclick=()=>{const a=bkAll();a[cur]=a[cur].filter(y=>!(y.s===x.s&&y.d===x.d&&y.t===x.t));bkSave(a);drawMe()};r.append(i,b);bl.append(r)});
+mine.forEach(x=>{const r=mk("div","bi"),i=mk("div");i.append(mk("b","",t.s[x.service]),mk("div","mute",fmtL(new Date(x.day+"T12:00"))+" · "+String(x.slot).slice(0,5)));const b=mk("button","btn o s",t.cl);b.onclick=async()=>{b.disabled=true;try{await ensure();await api("/rest/v1/bookings?id=eq."+x.id,{method:"DELETE"})}catch(e){}await loadData();drawMe()};r.append(i,b);bl.append(r)});
 const tb=mk("div","tabs");[["b",t.bt],["m",t.my+" ("+mine.length+")"]].forEach(([k,n])=>{const b=mk("button",tab===k?"on":"",n);b.onclick=()=>{tab=k;drawMe()};tb.append(b)});
 g.append(tab==="b"?c:bl);w.append(top,tb,g);me.append(w)}
 const _r=render;render=function(){_r();drawMe()};
-document.querySelectorAll('a[href="#account"]').forEach(a=>a.onclick=ev=>{ev.preventDefault();if(cur&&db()[cur])$("me").scrollIntoView({behavior:"smooth"});else $("account").hidden=false});
+document.querySelectorAll('a[href="#account"]').forEach(a=>a.onclick=ev=>{ev.preventDefault();if(sess)$("me").scrollIntoView({behavior:"smooth"});else $("account").hidden=false});
 $("cx").onclick=()=>$("account").hidden=true;$("account").onclick=ev=>{if(ev.target.id==="account")ev.target.hidden=true};
 const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add("on");io.unobserve(e.target)}}),{threshold:.06});
 document.querySelectorAll("section:not(.hero):not(#me)").forEach(x=>{x.classList.add("rvl");io.observe(x)});
 render();setMode("r");
+(async()=>{await loadData();drawMe()})();
 </script></body></html>
